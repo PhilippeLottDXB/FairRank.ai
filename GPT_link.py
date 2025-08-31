@@ -4,11 +4,11 @@ import openai
 
 # gets API Key from environment variable OPENAI_API_KEY
 def request(prompt,model = "gpt-4"):
-    print(st.secrets["OPENAI_API_KEY"])
+    key = st.secrets["OPENAI_API_KEY"]
     #key =OpenAI(api_key=)
 
     client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
-    openai.api_key = key
+    #openai.api_key = key
     # Non-streaming:
     #print("----- standard request -----")
     completion = client.chat.completions.create(
