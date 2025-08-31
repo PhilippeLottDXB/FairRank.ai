@@ -80,6 +80,7 @@ if "candidates" in st.session_state:
     #    time.sleep(0.02)
     #    progress_bar.progress(i + 1)
     st.success("Done! Check the Results page.")
-    st.switch_page("pages/2_Results.py")
+    st.switch_page("2_Results.py")
 else:
+
     st.warning("No file submitted yet.")
