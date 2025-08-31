@@ -5,9 +5,9 @@ import openai
 # gets API Key from environment variable OPENAI_API_KEY
 def request(prompt,model = "gpt-4"):
     print(st.secrets["OPENAI_API_KEY"])
-    key =OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+    #key =OpenAI(api_key=)
 
-    client = OpenAI(api_key=key)
+    client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
     openai.api_key = key
     # Non-streaming:
     #print("----- standard request -----")
@@ -25,6 +25,7 @@ def request(prompt,model = "gpt-4"):
 if __name__ == "__main__":
     data = request("What are the top cities in europe")
     print(data)
+
 
 
 
