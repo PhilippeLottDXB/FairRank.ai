@@ -89,7 +89,8 @@ if st.button("Submit"):
     # Do your processing or validation here
 
         st.success("Submitted! Go to the Progress page.")
-        st.switch_page("pages/1_Progress.py")
+        st.switch_page("1_Progress.py")
 
     else:
+
         st.warning("Please upload a file first.")
