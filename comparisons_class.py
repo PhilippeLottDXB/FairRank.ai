@@ -22,6 +22,17 @@ models = ["gpt-4o-mini","gpt-4.1-nano","gpt-4.1-mini",'o4-mini',"o3-mini","o1-mi
 path = r"C:\Users\Admin\OneDrive\Documents\CondorcetHR\database"
 model = models[0]
 
+def eval2(text):
+    try:
+        data = eval(text)
+        return data
+    except:
+        try:
+            data = eval(text+"}")
+            return data
+        except:
+            return None
+
 def find_best_match(expected_key, actual_keys, scorer=fuzz.token_set_ratio, threshold=60):
     """Use RapidFuzz to find best approximate match above a threshold."""
     match = process.extractOne(expected_key, actual_keys, scorer=scorer, score_cutoff=threshold)
@@ -49,7 +60,7 @@ def compare_pair(key1, val1, key2, val2):
     return result
 
 class overall_manager:
-    def __init__(self,cvs,model,jd,future_project,team_skills,ranking_information,progress_bar=None):
+    def __init__(self,cvs,model,jd,future_project,team_skills,ranking_information):
         self.debug = True
         self.cvs = cvs
         self.model = model
@@ -57,7 +68,6 @@ class overall_manager:
         self.future_project = future_project
         self.team_skills = team_skills
         self.ranking_information = ranking_information
-        self.progress_bar = progress_bar
         cvs_count = len(list(cvs.keys()))
         self.cvs_count_0 = cvs_count
         self.total_calls = cvs_count+0.14*(cvs_count)**2
@@ -65,15 +75,8 @@ class overall_manager:
         self.applicants = list(cvs.keys())
         self.update_lock = threading.Lock()
         
-        
-    def update_progress_bar(self):
-        self.ct += 1
-        pct =  self.ct/self.total_calls
-        if pct>1:
-            pct=1
-        if self.progress_bar is not None:
-            self.progress_bar(int(pct*100))
-            
+    def update_model(self,new_model):
+        self.model = new_model
         
     def collect_information_data(self):
         #texts = collect_texts(path)
@@ -83,7 +86,6 @@ class overall_manager:
                                                                    self.future_project,self.model,self.ranking_information)
             i2 = information.replace('json','').replace("```","").replace("\n","").replace("```","")
             self.results[key]=eval(i2)
-            self.update_progress_bar()
             if self.debug:
                 print(key,'\n', information)
         
@@ -98,6 +100,14 @@ class overall_manager:
         self.condorecet_selected = r1
         self.condorecet_applicants = r1.keys()
         
+    def condense_information_data(self):
+        ll = len(self.condorecet_selected)
+        self.information_frame = pd.DataFrame(index=self.condorecet_selected,columns=self.ranking_information)
+        for info in self.ranking_information:
+            for c in self.condorecet_selected:
+                self.information_frame.at[c,info]=int(self.results[c]["Category rating"][info])
+        
+        
     def collect_information_data_MT(self, num_threads=4):
         """
         Compare each CV against the offer in parallel.
@@ -108,25 +118,33 @@ class overall_manager:
         def worker(item):
             key, val = item
             # Submit to server
-            info = compare_candidates_against_offer_chatgpt(
-                val,
-                self.jd,
-                self.team_skills,
-                self.future_project,
-                self.model,
-                self.ranking_information
-            )
-            # Clean up JSON-like wrapper
-            payload = info.replace('json', '') \
-                          .replace("```", "") \
-                          .replace("\n", "")
-            result = eval(payload)
+            keepTrying = True
+            idx = 0
+            while keepTrying and idx<5:
+                idx+=1
+                info = compare_candidates_against_offer_chatgpt(
+                    val,
+                    self.jd,
+                    self.team_skills,
+                    self.future_project,
+                    self.model,
+                    self.ranking_information
+                )
+                # Clean up JSON-like wrapper
+                payload = info.replace('json', '') \
+                              .replace("```", "") \
+                              .replace("\n", "") \
+                              .replace("]","")    
+                try:
+                    result = eval2(payload)
+                    if result is not None:
+                        keepTrying = False
+                except:
+                    print("error in Evaluation")
+                    print(payload)
             # Safely update shared structures
-            with self.update_lock:
-                self.results[key] = result
-                self.update_progress_bar()
-                if self.debug:
-                    print(f"{key}\n{info}")
+            print(key)
+
             return key, result
 
         # Kick off threads
@@ -136,7 +154,9 @@ class overall_manager:
             for future in as_completed(futures):
                 # Can handle exceptions here if needed
                 try:
-                    future.result()
+                    res = future.result()
+                    key, result = res
+                    self.results[key] = result
                 except Exception as e:
                     print("Error processing CV:", e)
 
@@ -175,7 +195,6 @@ class overall_manager:
                 inverse0 = d2.replace('"A"','"A0"').replace('"B"','"B0"').replace(" A "," A0 ").replace(" B "," B0 ") 
                 inverse = inverse0.replace('"A0"','"B"').replace('"B0"','"A"').replace(" A0 "," B ").replace(" B0 "," A ") 
                 comparisons[key2][key1] = eval(inverse)
-                self.update_progress_bar()
                 if self.debug:
                     print(key1,key2,'\n',diff)
         #return comparisons
@@ -201,16 +220,26 @@ class overall_manager:
             key1, val1 = pair[0]
             key2, val2 = pair[1]
             # Call remote comparison API
-            diff = compare_candidates_chatgpt(
-                val1, val2,
-                self.jd, self.team_skills, self.future_project,
-                self.model, self.ranking_information
-            )
-            # Clean up payload
-            cleaned = diff.replace('json', '') \
-                          .replace("```", "") \
-                          .replace("\n", "")
-            result = eval(cleaned)
+            idx = 0
+            keepTrying = True
+            while keepTrying and idx<5:
+                idx+=1
+                diff = compare_candidates_chatgpt(
+                    val1, val2,
+                    self.jd, self.team_skills, self.future_project,
+                    self.model, self.ranking_information
+                )
+                # Clean up payload
+                cleaned = diff.replace('json', '') \
+                              .replace("```", "") \
+                              .replace("\n", "").replace("]","") 
+                try:
+                    result = eval2(cleaned)
+                    if result is not None:
+                        keepTrying = False
+                except:
+                    print("Error Running the GPT call")
+                    print(cleaned)
 
             # Build inverse mapping
             inv = cleaned.replace('"A"', '"A0"') \
@@ -222,14 +251,8 @@ class overall_manager:
                      .replace(" A0 ", " B ") \
                      .replace(" B0 ", " A ")
             inverse_result = eval(inv)
-
-            # Safely update shared structure
-            with self.update_lock:
-                comparisons[key1][key2] = result
-                comparisons[key2][key1] = inverse_result
-                self.update_progress_bar()
-                if self.debug:
-                    print(f"{key1} vs {key2}\n{diff}")
+            
+            return key1,key2,result,inverse_result
 
         # Prepare all unique pairs
         pairs = list(combinations(self.condorecet_selected.items(), 2))
@@ -238,10 +261,13 @@ class overall_manager:
         with ThreadPoolExecutor(max_workers=num_threads) as executor:
             futures = [executor.submit(worker, pair) for pair in pairs]
             for future in as_completed(futures):
-                try:
-                    future.result()
-                except Exception as e:
-                    print("Error during comparison:", e)
+                #try:
+                res = future.result()
+                key1,key2,result,inverse_result = res
+                comparisons[key1][key2]= result
+                comparisons[key2][key1] = inverse_result
+                #except Exception as e:
+                #    print("Error during comparison:", e)
 
         # Store and return
         self.results = comparisons
@@ -282,15 +308,17 @@ class overall_manager:
                     if a == b:
                         self.cat_winners[category][a][b] = 0
                     else:
-                        d = self.results[a][b]["category_winners"]
-                        c_key = category if category in d else find_closest_key(category, d.keys()) or find_best_match(category, d.keys())
-                        result = d.get(c_key, None)
-                        self.cat_winners[category][a][b] = 1 if result == "A" else -1 if result == "B" else 0
+                        try:
+                            d = self.results[a][b]["category_winners"]
+                            c_key = category if category in d else find_closest_key(category, d.keys()) or find_best_match(category, d.keys())
+                            result = d.get(c_key, None)
+                            self.cat_winners[category][a][b] = 1 if result == "A" else -1 if result == "B" else 0
+                        except:
+                            self.cat_winners[category][a][b] = 0
                     total += self.cat_winners[category][a][b]
                 self.cat_scores[category][a] = total
             self.cat_winners_df[category] = pd.DataFrame(self.cat_winners[category])
         return self.cat_winners, self.cat_scores,self.cat_winners_df
-
 
 
 def collect_comparison_data_MT(path, model, jd, future_project, team_skills, texts):

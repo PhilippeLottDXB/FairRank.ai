@@ -11,7 +11,7 @@ from information import jd, future_project, team_skills
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import threading
 
-models = ["gpt-5", "gpt-5-mini"]
+models = "gpt-5-mini"
 lock = threading.Lock()
 
 def get_key_skills(jd, models, n_repeat=10, debug=False):
@@ -20,19 +20,21 @@ def get_key_skills(jd, models, n_repeat=10, debug=False):
     def process_model(m):
         local_skills = []
         count[0] += 1
+        print(m)
         key_skills = Analyse_job_offer(jd, m)
+        print(key_skills)
+
         skills = eval(key_skills.replace('json', '').replace("```", "").replace("\n", ""))
-        #print(key_skills)
         for d in skills["key_skills_ranked"]:
             d2 = d.lower().strip()
             local_skills.append(d2)
         return local_skills
     m2 = n_repeat*models
     num_threads = n_repeat*len(models)
-
+    m = models
     # Run initial skill extraction in parallel
     with ThreadPoolExecutor(max_workers=num_threads) as executor:
-        futures = [executor.submit(process_model, m) for m in m2]
+        futures = [executor.submit(process_model, m) for i in range(n_repeat)]
         for future in as_completed(futures):
             try:
                 for skill in future.result():
@@ -43,7 +45,7 @@ def get_key_skills(jd, models, n_repeat=10, debug=False):
                 print("Error in process_model:", e)
 
     print("Non GPT test", len(lst2))
-    groups = compare_skill_lists(lst2, 80)
+    groups = compare_skill_lists(lst2, 85)
     lst2 = [g[0] for g in groups]
     print("Pre Audit Loop %d" % len(lst2))
 
@@ -57,7 +59,7 @@ def get_key_skills(jd, models, n_repeat=10, debug=False):
         local_lst3 = []
         shortlist_skills = Audit_layer_Skills(jd, lst2, m)
         skills = eval(shortlist_skills.replace('json', '').replace("```", "").replace("\n", ""))
-        #print(shortlist_skills)
+        print(shortlist_skills)
         for d in skills["key_skills_ranked"]:
             d2 = d.lower().strip()
             if d2 in lst2:
@@ -69,7 +71,7 @@ def get_key_skills(jd, models, n_repeat=10, debug=False):
 
     # Run audit in parallel
     with ThreadPoolExecutor(max_workers=num_threads) as executor:
-        futures = [executor.submit(audit_model, m) for m in m2]
+        futures = [executor.submit(audit_model, m) for i in range(n_repeat)]
         for future in as_completed(futures):
             try:
                 local_lst3, local_votes = future.result()

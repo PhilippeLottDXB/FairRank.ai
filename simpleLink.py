@@ -8,7 +8,6 @@ Created on Fri Jun 13 07:32:01 2025
 
 import os
 key = os.getenv("OPENAI_API_KEY")###
-key = "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"
 
 #import openai
 
